@@ -1,6 +1,11 @@
-import math
-from collections import Counter
+completed                = True         # Change this flag to True when you've completed the assignment.
+expected_completion_date = '03/08/2024'  # If your assignment is late, change this date to your expected completion date.
+questions_or_comments    = ""            # Fill in this string with any questions or comments you have; leave empty if none.
+extensions               = False         # Change this flag to True if you completed the  extension for this assignment.
+extensions_description   = ""            # If you did any extension, briefly explain what you did and where we should look for it.
 
+import math
+from collections import defaultdict
 
 class NgramLanguageModel:
     """
@@ -8,11 +13,11 @@ class NgramLanguageModel:
     """
 
     def __init__(self): 
-        self.unigram_counts = Counter()
-        self.bigram_counts = Counter()
-        self.V = 0
-        self.N = 0
+        self.unigram_counts = defaultdict(int)
+        self.bigram_counts = defaultdict(int)
+
         self.k = 0.01
+        self.total_unigrams = 0                 # Count all tokens
         
     def train(self, infile='samiam.train'):
         """Trains the language models by calculating n-gram counts from the corpus
@@ -41,19 +46,23 @@ class NgramLanguageModel:
         -------
         None (updates class attributes self.*_counts)
         """
-        #load the data
-        
-        with open(infile) as f:
-            data = f.read().splitlines()
-            for sentence in data:
-                s = ['<s>'] + sentence.split(" ") + ['</s>']
-                self.N += len(s) - 1 #not counting <s>
-                self.unigram_counts += Counter(s)
-                self.bigram_counts += Counter(zip(s,s[1:]))
-        self.unigram_counts = dict(self.unigram_counts)
-        self.bigram_counts = {key[0]+"_"+key[1]: value for key, value in self.bigram_counts.items()}
-        self.V = len(self.unigram_counts.keys())
-
+        # >>> YOUR ANSWER HERE
+        with open(infile, 'r', encoding='UTF-8') as f:
+            for line in f:
+                # print(line)
+                # tokens = ['<s>'] + line.stripe().split() + ['</s>']
+                tokens = ['<s>'] + line.split() + ['</s>']
+                # print(tokens)
+                for i, token in enumerate(tokens):
+                    self.unigram_counts[token] += 1
+                    self.total_unigrams += 1
+                    
+                    if i > 0:
+                        bigram = f'{tokens[i-1]}_{token}'
+                        # print(f'bigram: {bigram}')
+                        self.bigram_counts[bigram] += 1
+        # >>> END YOUR ANSWER
+       
 
     def predict_unigram(self, sentence):        
         """Calculates the log probability of the given sentence using a unigram LM.
@@ -91,16 +100,17 @@ class NgramLanguageModel:
             The log probability of the sentence.
         """
         # >>> YOUR ANSWER HERE
-        prob = 0.0
-        # words = re.findall('\w+', sentence)
-        sentence = sentence+' </s>'
-        words = sentence.split()
-        for word in words:
-            uni = 0 if word not in self.unigram_counts.keys() else self.unigram_counts[word]
-            prob += self.calProb(uni, self.N)
-        return prob
+        tokens = sentence.split() + ['</s>']
+        log_prob = 0        # Log probability
+        vocab_size = len(self.unigram_counts)
+        
+        for token in tokens:
+            prob = (self.unigram_counts[token] + self.k) / (self.total_unigrams + self.k * vocab_size)
+            log_prob += math.log(prob)
+        
+        return log_prob
         # >>> END YOUR ANSWER
-
+    
 
     def predict_bigram(self, sentence):
         """Calculates the log probability of the given sentence using a bigram LM.
@@ -121,21 +131,21 @@ class NgramLanguageModel:
             The log probability of the sentence.
         """
         # >>> YOUR ANSWER HERE
-        prob = 0.0
-        # words = re.findall('\w+', sentence)
-        sentence = '<s> '+sentence+' </s>'
-        words = sentence.split()
-        for i in range(1, len(words)):
-            concatStr = words[i-1]+"_"+words[i]
-            bi = 0 if concatStr not in self.bigram_counts.keys() else self.bigram_counts[concatStr]
-            uni = 0 if words[i-1] not in self.unigram_counts.keys() else self.unigram_counts[words[i-1]]
-            prob += self.calProb(bi, uni)
-
-        return prob
+        tokens = ['<s>'] + sentence.split() + ['</s>']
+        log_prob = 0.0
+        vocab_size = len(self.unigram_counts)
+        
+        # Source:
+        # Speech and Language Processing. Daniel Jurafsky & James H. Martin
+        # 3.6.2
+        for i in range(1, len(tokens)):
+            bigram = f"{tokens[i-1]}_{tokens[i]}"
+            prob = (self.bigram_counts[bigram] + self.k) / (self.unigram_counts[tokens[i-1]] + self.k * vocab_size)
+            log_prob += math.log(prob)
+        
+        return log_prob
         # >>> END YOUR ANSWER
 
-    def calProb(self,bi,uni):
-        return math.log((bi + self.k)/(uni + self.V * self.k))
 
     def test_perplexity(self, test_file, ngram_size='unigram'):
         """Calculate the perplexity of the trained LM on a test corpus.
@@ -177,37 +187,26 @@ class NgramLanguageModel:
             The perplexity of the corpus (normalized total log probability).
         """
         # >>> YOUR ANSWER HERE
-        prob = 0.0
-        norm_factor = 0
-        with open(test_file) as f:
-            sentences = f.read().splitlines()
-            for sentence in sentences:
-                prob += self.predict_unigram(sentence) if ngram_size=='unigram' else self.predict_bigram(sentence)
-                norm_factor += len(sentence.split()) + 1
+        total_log_prob = 0.0
+        N = 0
         
-        return 1/pow(math.exp(prob), 1/norm_factor)
-        # >>> END YOUR ANSWER         
+        with open(test_file, 'r', encoding='UTF-8') as f:
+            for line in f:
+                sentence = line.strip()
+                N += len(sentence.split()) + 1
+                
+                total_log_prob += self.predict_unigram(sentence) if ngram_size == 'unigram' else self.predict_bigram(sentence)
+        
+        # avg_log_prob = -total_log_prob / N
+        # return math.exp(avg_log_prob)
+        return math.exp(-1 * total_log_prob / N)    # Given in Assignment document
+        # >>> END YOUR ANSWER
 
 
 if __name__ == '__main__':
-    import sys
     ngram_lm = NgramLanguageModel()
     ngram_lm.train('samiam.train')
-    # test1 = ngram_lm.predict_unigram("SAM AND HAM IN A MOUSE HOUSE")
-    # print(test1)
-    # print(math.fabs(32.37 + test1) < 1)
-
-    # test2 = ngram_lm.predict_bigram("SAM AND HAM IN A MOUSE HOUSE")
-    # print(test2)
-    # print(math.fabs(33.70 + test2) < 1)
-
-    test3 = ngram_lm.test_perplexity('samiam.test','unigram')
-    print(test3)
-
-    v1 = math.fabs(59.42 - test3) < 1
-    v2 = math.fabs(53.15 - test3) < 1
-    print(v1 or v2)
-    # print('Training perplexity, unigram:\t', ngram_lm.test_perplexity('samiam.train'))
-    # print('Training perplexity, bigram:\t', ngram_lm.test_perplexity('samiam.train','bigram'))
-    # print('Test perplexity, unigram:\t', ngram_lm.test_perplexity('samiam.test'))
-    # print('Test perplexity, bigram:\t', ngram_lm.test_perplexity('samiam.test','bigram'))
+    print('Training perplexity, unigram:\t', ngram_lm.test_perplexity('samiam.train'))
+    print('Training perplexity, bigram:\t', ngram_lm.test_perplexity('samiam.train','bigram'))
+    print('Test perplexity, unigram:\t', ngram_lm.test_perplexity('samiam.test'))
+    print('Test perplexity, bigram:\t', ngram_lm.test_perplexity('samiam.test','bigram'))

@@ -1,8 +1,8 @@
 completed                = True         # Change this flag to True when you've completed the assignment.
-expected_completion_date = '03/08/2024'  # If your assignment is late, change this date to your expected completion date.
+expected_completion_date = 'N/A'  # If your assignment is late, change this date to your expected completion date.
 questions_or_comments    = ""            # Fill in this string with any questions or comments you have; leave empty if none.
-extensions               = False         # Change this flag to True if you completed the  extension for this assignment.
-extensions_description   = ""            # If you did any extension, briefly explain what you did and where we should look for it.
+extensions               = True         # Change this flag to True if you completed the  extension for this assignment.
+extensions_description   = "self.total_unigrams added in order to reduce calculations everytime we call predict_* functions"            # If you did any extension, briefly explain what you did and where we should look for it.
 
 import math
 from collections import defaultdict
@@ -54,8 +54,8 @@ class NgramLanguageModel:
                 tokens = ['<s>'] + line.split() + ['</s>']
                 # print(tokens)
                 for i, token in enumerate(tokens):
-                    self.unigram_counts[token] += 1
-                    self.total_unigrams += 1
+                    self.unigram_counts[token] += 1     # count only for the token
+                    self.total_unigrams += 1            # count total unigrams instead of adding them every time from self.unigram_counts
                     
                     if i > 0:
                         bigram = f'{tokens[i-1]}_{token}'
@@ -104,7 +104,11 @@ class NgramLanguageModel:
         log_prob = 0        # Log probability
         vocab_size = len(self.unigram_counts)
         
+        # Source:
+        # Speech and Language Processing. Daniel Jurafsky & James H. Martin
+        # Equation 3.28
         for token in tokens:
+            #print(self.unigram_counts[token])
             prob = (self.unigram_counts[token] + self.k) / (self.total_unigrams + self.k * vocab_size)
             log_prob += math.log(prob)
         
@@ -137,9 +141,9 @@ class NgramLanguageModel:
         
         # Source:
         # Speech and Language Processing. Daniel Jurafsky & James H. Martin
-        # 3.6.2
+        # Equation 3.28
         for i in range(1, len(tokens)):
-            bigram = f"{tokens[i-1]}_{tokens[i]}"
+            bigram = f'{tokens[i-1]}_{tokens[i]}'
             prob = (self.bigram_counts[bigram] + self.k) / (self.unigram_counts[tokens[i-1]] + self.k * vocab_size)
             log_prob += math.log(prob)
         
@@ -195,6 +199,7 @@ class NgramLanguageModel:
                 sentence = line.strip()
                 N += len(sentence.split()) + 1
                 
+                # Call the right fucntion based on ngram_size
                 total_log_prob += self.predict_unigram(sentence) if ngram_size == 'unigram' else self.predict_bigram(sentence)
         
         # avg_log_prob = -total_log_prob / N
